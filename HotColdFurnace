@@ -1,0 +1,85 @@
+alias Furnace d0
+alias ColdSensor d1
+alias HotSensor d2
+alias Mixer d3 # Input 1 is cold, 2 is hot
+alias TempSetting d4
+alias PressureSetting d5
+
+alias DesiredTemperature r14
+alias DesiredPressure r15
+
+initialize:
+s Furnace On 1
+s Furnace SettingInput 0
+s Furnace SettingOutput 0
+s Mixer On 0
+
+loop:
+l DesiredTemperature TempSetting Setting
+l DesiredPressure PressureSetting Setting
+jal checktemp  # r0 is 1 if temp is good, 0 if not
+beqz r0 loop
+jal checkpress
+j loop
+
+checktemp:
+l r0 Furnace Temperature
+blt r0 DesiredTemperature toocold
+add r1 DesiredTemperature 5
+bgt r0 r1 toohot
+j ra
+toohot:
+s Mixer Setting 1
+s Mixer On 1
+s Furnace SettingInput 100
+j ra
+toocold:
+s Mixer Setting 0
+s Mixer On 1
+j ra
+
+
+checkpress:
+l r0 Furnace Pressure
+blt r0 DesiredPressure pressUp
+add r1 DesiredPressure 10
+bgt r0 r1 pressDown
+j ra
+
+pressUp:
+push ra
+move r0 DesiredTemperature
+jal calculateMix
+pop ra
+s Mixer Setting r0
+s Mixer On 1
+s Furnace SettingInput 100
+s Furnace SettingOutput 0
+j ra
+
+pressDown:
+s Furnace SettingOutput 100
+s Furnace SettingInput 0
+s Mixer On 0
+j ra
+
+calculateMix:
+# this assumes r0 has the desired Temp,
+# and will return the needed ratio in r0
+alias inverseT1 r12
+alias inverseT2 r13
+alias inverseTf r14
+alias multiplier r15
+div inverseTf 1 r0
+l r0 ColdSensor Temperature
+div inverseT1 1 r0
+l r0 HotSensor Temperature
+div inverseT2 1 r0
+sub r1 inverseT1 inverseTf
+sub r2 inverseT2 inverseTf
+div multiplier r1 r2
+# multiplier m as in V2 = mV1
+# need to convert to ratio
+add r1 multiplier 1
+div r0 1 r1
+j ra
